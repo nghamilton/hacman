@@ -1,20 +1,21 @@
 {-# LANGUAGE EmptyDataDecls #-}
 
 
-module Main where
+module Hackman where
 import Data.Char
 --import Data.Vector
 
-data Item = W | D | S | P | E deriving (Show)
+data Item = W | D | S | P | E deriving (Show, Eq)
 
 type Row = [Item]
 type Board = [Row]
 type Pos = (Int,Int)
+type Score = Int
 
 board = [ [W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W],
   [W,D,D,D,D,D,D,D,D,D,D,D,D,W,W,D,D,D,D,D,D,D,D,D,D,D,D,W],
   [W,D,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,D,W],
-  [W,S,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,S,W],
+  [W,D,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,D,W],
   [W,D,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,D,W],
   [W,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,W],
   [W,D,W,W,W,W,D,W,W,D,W,W,W,W,W,W,W,W,D,W,W,D,W,W,W,W,D,W],
@@ -34,72 +35,84 @@ board = [ [W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W],
   [W,D,W,W,W,W,D,W,W,D,W,W,W,W,W,W,W,W,D,W,W,D,W,W,W,W,D,W],
   [W,D,D,D,D,D,D,D,D,D,D,D,D,S,D,D,D,D,D,D,D,D,D,D,D,D,D,W],
   [W,D,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,D,W],
-  [W,S,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,S,W],
+  [W,D,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,D,W],
   [W,D,W,W,W,W,D,W,W,W,W,W,D,W,W,D,W,W,W,W,W,D,W,W,W,W,D,W],
   [W,D,D,D,D,D,D,D,D,D,D,D,D,W,W,D,D,D,D,D,D,D,D,D,D,D,D,W],
   [W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W] ] :: Board
 
-startPos = (14,21)
+startPos = (13,21)
 
 main :: IO ()
 main = do
-  updateBoard board startPos
+  loopBoard (board,startPos,0)
 
-updateBoard :: Board -> Pos -> IO ()
-updateBoard b p = do
--- take one char input
---  print p
-  putStrLn $ replicate 100 '\n' 
-  putStrLn $ showBoard b p
+esC a = '\27':a
+col c a = esC c ++ a ++ esC "[0m" 
+blue = "[94m"
+blueb = "[44m"
+yellowb = "[33m"
+
+
+loopBoard :: (Board,Pos,Score) -> IO ()
+loopBoard (b,p,s) = do
+  putStrLn $ esC "[2J"
+  putStrLn $ show s
+  putStrLn $ showBoard $ addPacman b p 
   c <- getChar
--- validate move (ie no wall)
+  loopBoard $ updateBoard b p c s
+
+updateBoard :: Board -> Pos -> Char -> Score -> (Board,Pos,Score)
+updateBoard b p c s =
   case validate c of
-    Nothing -> main
-    Just offset -> do
-      let p'@(x,y) = updatePos p offset 
-      let b' = eatDot b p
-      case (board!!y!!x) of
-        W -> updateBoard b p 
-        E -> undefined 
-        _ -> updateBoard b' p' 
---
--- refresh board state
--- show board
--- rinse, repeat
--- putSteupdateBoard b p Lce n item ls = a ++ (item:b) where (a, (_:b)) =
--- splitAt n lsn $ showBoard board
+    Nothing -> (b,p,s)
+    Just offset -> res where
+      p'@(x,y) = updatePos p offset 
+      res = case (board!!y!!x) of
+        W -> (b,p,s) 
+        _ -> (b',p',s+s')
+      (b',s') = eat b p'
 
+updatePos :: Pos -> Pos -> Pos
+updatePos (x,y) (x',y') =  (doWrap(x+x'), doWrap(y+y'))
 
-updatePos (x,y) (x',y') = (x+x',y+y')
+doWrap :: Int -> Int
+doWrap -1 = 27
+doWrap 28 = 0
+doWrap i = i
 
 validate 'u' = Just (0,-1)
 validate 'h' = Just (-1,0)
 validate 'k' = Just (1,0)
 validate 'j' = Just (0,1)
-validate _ = Just (0,0) 
+validate _ = Nothing
 
-showBoard :: Board -> Pos -> String
-showBoard b (x,y) = concat $ map showRow $ b' where
-  b' = upd y x P b
+editBoard :: Board -> Item -> Pos -> Board 
+editBoard b i (x,y) = b' where
+  b' = upd y x i b
   upd row col x xs =
       let row_to_replace_in = xs !! row
           modified_row = replace col x row_to_replace_in
       in replace row modified_row xs
   replace n item ls = a ++ (item:b) where (a, (_:b)) = splitAt n ls
 
-eatDot :: Board -> Pos -> Board 
-eatDot b (x,y) = b' where
-  b' = upd y x S b
-  upd row col x xs =
-      let row_to_replace_in = xs !! row
-          modified_row = replace col x row_to_replace_in
-      in replace row modified_row xs
-  replace n item ls = a ++ (item:b) where (a, (_:b)) = splitAt n ls
+eat :: Board -> Pos -> (Board,Score)
+eat b (x,y) = (b',s) where
+  b' = editBoard b S (x,y)
+  s = case b!!y!!x of
+    D -> 1
+    E -> 100
+    _ -> 0
+
+addPacman :: Board -> Pos -> Board 
+addPacman b (x,y) = editBoard b P (x,y)
+
+showBoard :: Board -> String
+showBoard b = concat $ map showRow b 
 
 showRow :: Row -> String
-showRow r = map conv r ++ ['\n'] where
-  conv W = '#' -- 219 
-  conv D = '.' -- 167
-  conv S = ' '
-  conv P = '©' -- 184
-  conv E = 'X'
+showRow r = concat $ map conv r ++ ["\n"] where
+  conv W = col blueb " "
+  conv D = "."
+  conv S = " "
+  conv P = col yellowb "©" 
+  conv E = "X"
